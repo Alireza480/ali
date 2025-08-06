@@ -19,9 +19,9 @@ impl Blockchain {
     pub fn new() -> Self {
         Blockchain {
             chain: Vec::new(),
-            difficulty: 4, // سختی متوسط
+            difficulty: 5, // سختی 5 صفر
             pending_transactions: Vec::new(),
-            mining_reward: 10.0, // پاداش استخراج
+            mining_reward: 50.0, // پاداش اولیه 50 TEC
             balances: HashMap::new(),
         }
     }
@@ -36,6 +36,49 @@ impl Blockchain {
             
             self.chain.push(genesis_block);
             println!("✅ بلاک Genesis ایجاد شد!");
+            println!("💎 کل عرضه فعلی: {} TEC", self.get_total_supply());
+        }
+    }
+
+    // محاسبه پاداش استخراج با در نظر گیری هاوینگ
+    pub fn calculate_mining_reward(&self) -> f64 {
+        let current_height = self.chain.len() as u64;
+        let halving_interval = 100_000u64;
+        let halvings = current_height / halving_interval;
+        
+        // اگر تمام هاوینگ‌ها تمام شده باشد، پاداش صفر است
+        if halvings >= 8 { // 50 / 2^8 ≈ 0.2, که عملاً صفر است
+            return 0.0;
+        }
+        
+        // محاسبه پاداش فعلی
+        let current_reward = self.mining_reward / (2.0_f64.powi(halvings as i32));
+        
+        // بررسی حداکثر عرضه (10 میلیون)
+        let max_supply = 10_000_000.0;
+        let current_supply = self.get_total_supply();
+        
+        if current_supply >= max_supply {
+            return 0.0; // دیگر پاداش استخراج نیست
+        }
+        
+        // اطمینان از عدم تجاوز از حداکثر عرضه
+        if current_supply + current_reward > max_supply {
+            return max_supply - current_supply;
+        }
+        
+        current_reward
+    }
+
+    // بررسی اینکه آیا هاوینگ اتفاق افتاده است
+    pub fn check_halving(&self) -> Option<u64> {
+        let current_height = self.chain.len() as u64;
+        let halving_interval = 100_000u64;
+        
+        if current_height > 0 && current_height % halving_interval == 0 {
+            Some(current_height / halving_interval)
+        } else {
+            None
         }
     }
 
@@ -66,18 +109,25 @@ impl Blockchain {
     }
 
     pub async fn mine_pending_transactions(&mut self, mining_reward_address: &str) -> Result<(), String> {
-        if self.pending_transactions.is_empty() {
-            return Err("هیچ تراکنش در انتظاری وجود ندارد".to_string());
+        let current_reward = self.calculate_mining_reward();
+        let mut transactions = Vec::new();
+
+        // اضافه کردن تراکنش پاداش استخراج (اگر هنوز پاداش وجود دارد)
+        if current_reward > 0.0 {
+            let reward_transaction = Transaction::mining_reward(
+                mining_reward_address.to_string(),
+                current_reward,
+            );
+            transactions.push(reward_transaction);
         }
 
-        // اضافه کردن تراکنش پاداش استخراج
-        let reward_transaction = Transaction::mining_reward(
-            mining_reward_address.to_string(),
-            self.mining_reward,
-        );
-
-        let mut transactions = vec![reward_transaction];
+        // اضافه کردن تراکنش‌های در انتظار
         transactions.extend(self.pending_transactions.clone());
+
+        // اگر هیچ تراکنشی نباشد، بلاک خالی نمی‌سازیم
+        if transactions.is_empty() {
+            return Err("هیچ تراکنش برای استخراج وجود ندارد".to_string());
+        }
 
         // ایجاد بلاک جدید
         let previous_hash = self.get_latest_block()
@@ -95,8 +145,9 @@ impl Blockchain {
         let start_time = std::time::Instant::now();
         
         // استخراج در یک task جداگانه برای non-blocking بودن
+        let difficulty = self.difficulty;
         new_block = tokio::task::spawn_blocking(move || {
-            new_block.mine_block(4); // سختی 4
+            new_block.mine_block(difficulty); // سختی 5 صفر
             new_block
         }).await.map_err(|_| "خطا در استخراج بلاک")?;
 
@@ -121,7 +172,15 @@ impl Blockchain {
         // پاک کردن تراکنش‌های در انتظار
         self.pending_transactions.clear();
 
+        // بررسی هاوینگ
+        if let Some(halving_count) = self.check_halving() {
+            let new_reward = self.calculate_mining_reward();
+            println!("🎉 هاوینگ #{} اتفاق افتاد! پاداش جدید: {} TEC", halving_count, new_reward);
+        }
+
         println!("✅ بلاک جدید با موفقیت به زنجیره اضافه شد!");
+        println!("💎 کل عرضه: {} TEC از 10,000,000 TEC", self.get_total_supply());
+        
         Ok(())
     }
 

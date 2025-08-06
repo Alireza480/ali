@@ -3,7 +3,7 @@ use tokio::sync::Mutex;
 use tokio::time::{sleep, Duration};
 
 use crate::blockchain::Blockchain;
-use crate::wallet::Wallet;
+// use crate::wallet::Wallet;
 
 pub struct Miner {
     wallet: Wallet,

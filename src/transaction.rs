@@ -3,7 +3,7 @@ use sha2::{Digest, Sha256};
 use secp256k1::{Message, PublicKey, Secp256k1, SecretKey};
 use std::fmt;
 use uuid::Uuid;
-use crate::wallet::Wallet;
+// use crate::wallet::Wallet;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Transaction {
@@ -20,7 +20,7 @@ impl Transaction {
         from_address: String,
         to_address: String,
         amount: f64,
-        wallet: &Wallet,
+        wallet: &crate::address::Wallet,
     ) -> Result<Self, String> {
         if amount <= 0.0 {
             return Err("مقدار تراکنش باید مثبت باشد".to_string());
@@ -40,6 +40,35 @@ impl Transaction {
         Ok(transaction)
     }
 
+    pub fn new_with_fee(
+        from_address: String,
+        to_address: String,
+        amount: f64,
+        fee: f64,
+        wallet: &crate::address::Wallet,
+    ) -> Result<Self, String> {
+        if amount <= 0.0 {
+            return Err("مقدار تراکنش باید مثبت باشد".to_string());
+        }
+
+        if fee < 0.0 {
+            return Err("کارمزد نمی‌تواند منفی باشد".to_string());
+        }
+
+        let mut transaction = Transaction {
+            id: Uuid::new_v4().to_string(),
+            from_address: from_address.clone(),
+            to_address,
+            amount: amount + fee, // اضافه کردن fee به مقدار
+            timestamp: chrono::Utc::now(),
+            signature: None,
+        };
+
+        // امضای تراکنش
+        transaction.sign_transaction_simple(wallet)?;
+        Ok(transaction)
+    }
+
     pub fn calculate_hash(&self) -> String {
         let data = format!(
             "{}{}{}{}{}",
@@ -50,13 +79,30 @@ impl Transaction {
         hex::encode(hasher.finalize())
     }
 
-    pub fn sign_transaction(&mut self, wallet: &Wallet) -> Result<(), String> {
+    pub fn sign_transaction(&mut self, wallet: &crate::address::Wallet) -> Result<(), String> {
         if self.from_address != wallet.get_address() {
             return Err("شما نمی‌توانید تراکنش‌های دیگران را امضا کنید".to_string());
         }
 
         let hash = self.calculate_hash();
         let signature = wallet.sign_data(&hash)?;
+        self.signature = Some(signature);
+        Ok(())
+    }
+
+    pub fn sign_transaction_simple(&mut self, wallet: &crate::address::Wallet) -> Result<(), String> {
+        if self.from_address != wallet.get_address() {
+            return Err("شما نمی‌توانید تراکنش‌های دیگران را امضا کنید".to_string());
+        }
+
+        // برای سادگی، از اولین کلید خصوصی استفاده می‌کنیم
+        if wallet.private_keys.is_empty() {
+            return Err("کلید خصوصی یافت نشد".to_string());
+        }
+
+        let hash = self.calculate_hash();
+        // ساده‌سازی امضا
+        let signature = format!("sig_{}", hash[..16].to_string());
         self.signature = Some(signature);
         Ok(())
     }
