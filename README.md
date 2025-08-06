@@ -1,8 +1,8 @@
-# 🪙 TenCoin (TEC) - ارز دیجیتال ایرانی
+# 🪙 TenCoin (TEC) - Digital Currency
 
-یک پیاده‌سازی کامل از بلاک چین و ارز دیجیتال با الگوریتم هاوینگ مشابه بیتکوین، ساخته شده با Rust.
+A complete implementation of blockchain and digital currency with Bitcoin-like halving algorithm, built with Rust.
 
-## ✨ ویژگی‌های کلیدی
+## ✨ Key Features
 
 - 🪙 **نام:** TenCoin (TEC)
 - 💎 **حداکثر عرضه:** 10,000,000 TEC

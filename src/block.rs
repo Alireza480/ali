@@ -57,7 +57,7 @@ impl Block {
         let target = "0".repeat(difficulty);
         let start_time = std::time::Instant::now();
         
-        println!("⛏️  شروع استخراج بلاک {} با سختی {}...", self.index, difficulty);
+        println!("⛏️  Start mining block {} با difficulty {}...", self.index, difficulty);
         
         loop {
             self.hash = self.calculate_hash();
@@ -65,7 +65,7 @@ impl Block {
             if self.hash.starts_with(&target) {
                 let duration = start_time.elapsed();
                 println!(
-                    "✅ بلاک {} استخراج شد! Nonce: {}, زمان: {:.2}s, Hash: {}",
+                    "✅ block {} mined! Nonce: {}, زمان: {:.2}s, Hash: {}",
                     self.index,
                     self.nonce,
                     duration.as_secs_f64(),
@@ -84,27 +84,27 @@ impl Block {
     }
 
     pub fn is_valid(&self, previous_hash: &str) -> bool {
-        // بررسی hash قبلی
+        // Check hash قبلی
         if self.previous_hash != previous_hash {
             println!("❌ Hash قبلی اشتباه است");
             return false;
         }
 
-        // بررسی hash فعلی
+        // Check hash فعلی
         if self.hash != self.calculate_hash() {
             println!("❌ Hash فعلی اشتباه است");
             return false;
         }
 
-        // بررسی صحت تراکنش‌ها
+        // Check صحت transaction‌ها
         for transaction in &self.transactions {
             if !transaction.is_valid() {
-                println!("❌ تراکنش نامعتبر پیدا شد");
+                println!("❌ Invalid transaction پیدا شد");
                 return false;
             }
         }
 
-        // بررسی Merkle Root
+        // Check Merkle Root
         let calculated_merkle = Self::calculate_merkle_root(&self.transactions);
         if self.merkle_root != calculated_merkle {
             println!("❌ Merkle Root اشتباه است");
@@ -131,7 +131,7 @@ impl Block {
                 let combined = if chunk.len() == 2 {
                     format!("{}{}", chunk[0], chunk[1])
                 } else {
-                    format!("{}{}", chunk[0], chunk[0]) // تکرار آخرین hash اگر فرد باشد
+                    format!("{}{}", chunk[0], chunk[0]) // تکرار آخرین hash اگر فReject باشد
                 };
                 
                 let mut hasher = Sha256::new();
@@ -145,11 +145,11 @@ impl Block {
         hashes[0].clone()
     }
 
-    // بلاک Genesis
+    // block Genesis
     pub fn genesis() -> Self {
         let genesis_transaction = Transaction::genesis_transaction();
         let mut genesis_block = Block::new(0, vec![genesis_transaction], String::new());
-        genesis_block.mine_block(2); // سختی کم برای Genesis
+        genesis_block.mine_block(2); // difficulty کم برای Genesis
         genesis_block
     }
 
@@ -164,13 +164,13 @@ impl Block {
 
 impl fmt::Display for Block {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        writeln!(f, "📦 بلاک #{}", self.index)?;
+        writeln!(f, "📦 block #{}", self.index)?;
         writeln!(f, "🕐 زمان: {}", self.timestamp.format("%Y-%m-%d %H:%M:%S"))?;
         writeln!(f, "🔗 Hash قبلی: {}", if self.previous_hash.is_empty() { "Genesis" } else { &self.previous_hash[..16] })?;
         writeln!(f, "🆔 Hash: {}", &self.hash[..16])?;
         writeln!(f, "🎯 Nonce: {}", self.nonce)?;
         writeln!(f, "🌳 Merkle Root: {}", &self.merkle_root[..16])?;
-        writeln!(f, "📊 تعداد تراکنش: {}", self.transactions.len())?;
+        writeln!(f, "📊 تعداد transaction: {}", self.transactions.len())?;
         writeln!(f, "💰 مجموع مقدار: {} RustCoin", self.get_total_amount())?;
         
         for (i, tx) in self.transactions.iter().enumerate() {

@@ -6,13 +6,13 @@ use crate::blockchain::Blockchain;
 // use crate::wallet::Wallet;
 
 pub struct Miner {
-    wallet: Wallet,
+    wallet: crate::address::Wallet,
     blockchain: Arc<Mutex<Blockchain>>,
     is_mining: Arc<Mutex<bool>>,
 }
 
 impl Miner {
-    pub fn new(wallet: Wallet, blockchain: Arc<Mutex<Blockchain>>) -> Self {
+    pub fn new(wallet: crate::address::Wallet, blockchain: Arc<Mutex<Blockchain>>) -> Self {
         Miner {
             wallet,
             blockchain,
@@ -24,12 +24,12 @@ impl Miner {
         {
             let mut is_mining = self.is_mining.lock().await;
             if *is_mining {
-                return Err("استخراج در حال حاضر فعال است".to_string());
+                return Err("mining در حال حاضر active است".to_string());
             }
             *is_mining = true;
         }
 
-        println!("⛏️  شروع استخراج توسط: {}", self.wallet.get_address());
+        println!("⛏️  Start mining توسط: {}", self.wallet.get_address());
 
         loop {
             {
@@ -39,27 +39,27 @@ impl Miner {
                 }
             }
 
-            // بررسی وجود تراکنش‌های در انتظار
+            // Check وجود transaction‌های pending
             let has_pending = {
                 let blockchain = self.blockchain.lock().await;
                 blockchain.get_pending_transactions_count() > 0
             };
 
             if has_pending {
-                // استخراج بلاک
+                // Mining block
                 match self.mine_block().await {
                     Ok(_) => {
-                        println!("✅ بلاک با موفقیت استخراج شد!");
+                        println!("✅ block successfully mined!");
                         
-                        // نمایش موجودی فعلی
+                        // نمایش balance فعلی
                         let balance = {
                             let blockchain = self.blockchain.lock().await;
                             blockchain.get_balance(&self.wallet.get_address())
                         };
-                        println!("💰 موجودی فعلی: {} RustCoin", balance);
+                        println!("💰 balance فعلی: {} RustCoin", balance);
                     }
                     Err(e) => {
-                        println!("❌ خطا در استخراج: {}", e);
+                        println!("❌ Error in mining: {}", e);
                     }
                 }
             }
@@ -68,14 +68,14 @@ impl Miner {
             sleep(Duration::from_secs(5)).await;
         }
 
-        println!("⏹️  استخراج متوقف شد");
+        println!("⏹️  mining مStop شد");
         Ok(())
     }
 
     pub async fn stop_mining(&self) {
         let mut is_mining = self.is_mining.lock().await;
         *is_mining = false;
-        println!("🛑 درخواست توقف استخراج ارسال شد");
+        println!("🛑 درخواست Stop mining sent");
     }
 
     async fn mine_block(&self) -> Result<(), String> {
@@ -105,15 +105,15 @@ impl MiningPool {
         }
     }
 
-    pub fn add_miner(&mut self, wallet: Wallet) -> Arc<Miner> {
+    pub fn add_miner(&mut self, wallet: crate::address::Wallet) -> Arc<Miner> {
         let miner = Arc::new(Miner::new(wallet, self.blockchain.clone()));
         self.miners.push(miner.clone());
-        println!("👷 استخراج‌کننده جدید اضافه شد: {}", miner.get_miner_address());
+        println!("👷 mining‌کننده جدید added: {}", miner.get_miner_address());
         miner
     }
 
     pub async fn start_all_miners(&self) {
-        println!("🚀 شروع همه استخراج‌کننده‌ها...");
+        println!("🚀 Start همه mining‌کننده‌ها...");
         
         let mut handles = Vec::new();
         
@@ -121,20 +121,20 @@ impl MiningPool {
             let miner_clone = miner.clone();
             let handle = tokio::spawn(async move {
                 if let Err(e) = miner_clone.start_mining().await {
-                    println!("❌ خطا در استخراج‌کننده {}: {}", miner_clone.get_miner_address(), e);
+                    println!("❌ Error in mining‌کننده {}: {}", miner_clone.get_miner_address(), e);
                 }
             });
             handles.push(handle);
         }
 
-        // انتظار برای تمام استخراج‌کننده‌ها
+        // Wait برای تمام mining‌کننده‌ها
         for handle in handles {
             let _ = handle.await;
         }
     }
 
     pub async fn stop_all_miners(&self) {
-        println!("🛑 توقف همه استخراج‌کننده‌ها...");
+        println!("🛑 Stop همه mining‌کننده‌ها...");
         
         for miner in &self.miners {
             miner.stop_mining().await;
@@ -175,12 +175,12 @@ pub struct MiningStats {
 
 impl std::fmt::Display for MiningStats {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        writeln!(f, "📊 آمار استخراج")?;
+        writeln!(f, "📊 آمار mining")?;
         writeln!(f, "==================")?;
-        writeln!(f, "👷 کل استخراج‌کننده‌ها: {}", self.total_miners)?;
-        writeln!(f, "⚡ استخراج‌کننده‌های فعال: {}", self.active_miners)?;
-        writeln!(f, "📦 کل بلاک‌ها: {}", self.total_blocks)?;
-        writeln!(f, "⏳ تراکنش‌های در انتظار: {}", self.pending_transactions)?;
+        writeln!(f, "👷 کل mining‌کننده‌ها: {}", self.total_miners)?;
+        writeln!(f, "⚡ mining‌کننده‌های active: {}", self.active_miners)?;
+        writeln!(f, "📦 کل block‌ها: {}", self.total_blocks)?;
+        writeln!(f, "⏳ transaction‌های pending: {}", self.pending_transactions)?;
         Ok(())
     }
 }

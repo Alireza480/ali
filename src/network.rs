@@ -23,15 +23,15 @@ pub enum NetworkMessage {
         node_id: String,
         accepted: bool,
     },
-    // انتشار تراکنش جدید
+    // انتشار transaction جدید
     NewTransaction(Transaction),
-    // انتشار بلاک جدید
+    // انتشار block جدید
     NewBlock(Block),
-    // درخواست همگام‌سازی بلاک چین
+    // درخواست synchronization blockchain
     SyncRequest {
         from_height: u64,
     },
-    // پاسخ همگام‌سازی
+    // پاسخ synchronization
     SyncResponse {
         blocks: Vec<Block>,
     },
@@ -82,20 +82,20 @@ impl NetworkNode {
         {
             let mut is_running = self.is_running.lock().await;
             if *is_running {
-                return Err("شبکه در حال حاضر فعال است".to_string());
+                return Err("network در حال حاضر active است".to_string());
             }
             *is_running = true;
         }
 
-        println!("🌐 شروع نود شبکه {} در آدرس {}", self.node_id, self.listen_address);
+        println!("🌐 Start node network {} در address {}", self.node_id, self.listen_address);
 
         let listener = TcpListener::bind(self.listen_address)
             .await
-            .map_err(|e| format!("خطا در باز کردن پورت: {}", e))?;
+            .map_err(|e| format!("Error in باز کRejectن پورت: {}", e))?;
 
         println!("👂 در حال گوش دادن به اتصالات...");
 
-        // شروع loop برای پذیرش اتصالات
+        // Start loop برای پذیرش اتصالات
         let peers = self.peers.clone();
         let blockchain = self.blockchain.clone();
         let node_id = self.node_id.clone();
@@ -122,7 +122,7 @@ impl NetworkNode {
                         });
                     }
                     Err(e) => {
-                        println!("❌ خطا در پذیرش اتصال: {}", e);
+                        println!("❌ Error in پذیرش اتصال: {}", e);
                     }
                 }
             }
@@ -134,18 +134,18 @@ impl NetworkNode {
     pub async fn stop(&self) {
         let mut is_running = self.is_running.lock().await;
         *is_running = false;
-        println!("🛑 نود شبکه متوقف شد");
+        println!("🛑 node network مStop شد");
     }
 
     pub async fn connect_to_peer(&self, peer_address: &str) -> Result<(), String> {
         let addr: SocketAddr = peer_address.parse()
-            .map_err(|_| "آدرس نامعتبر".to_string())?;
+            .map_err(|_| "Invalid address".to_string())?;
 
         println!("🔗 تلاش برای اتصال به: {}", addr);
 
         match TcpStream::connect(addr).await {
             Ok(mut stream) => {
-                // ارسال پیام Handshake
+                // Send پیام Handshake
                 let blockchain_height = {
                     let blockchain = self.blockchain.lock().await;
                     blockchain.get_chain_length() as u64
@@ -158,16 +158,16 @@ impl NetworkNode {
                 };
 
                 let message_json = serde_json::to_string(&handshake)
-                    .map_err(|_| "خطا در سریال کردن پیام".to_string())?;
+                    .map_err(|_| "Error in سریال کRejectن پیام".to_string())?;
 
                 stream.write_all(message_json.as_bytes()).await
-                    .map_err(|_| "خطا در ارسال پیام".to_string())?;
+                    .map_err(|_| "Error in ارسال پیام".to_string())?;
 
                 println!("✅ اتصال به {} برقرار شد", addr);
                 Ok(())
             }
             Err(e) => {
-                Err(format!("خطا در اتصال: {}", e))
+                Err(format!("Error in اتصال: {}", e))
             }
         }
     }
@@ -202,12 +202,12 @@ impl NetworkNode {
                             ).await;
                         }
                         Err(e) => {
-                            println!("❌ خطا در پارس پیام: {}", e);
+                            println!("❌ Error in پارس پیام: {}", e);
                         }
                     }
                 }
                 Err(e) => {
-                    println!("❌ خطا در خواندن داده: {}", e);
+                    println!("❌ Error in reading داده: {}", e);
                     break;
                 }
             }
@@ -226,7 +226,7 @@ impl NetworkNode {
             NetworkMessage::Handshake { node_id: peer_id, version: _, blockchain_height } => {
                 println!("🤝 دریافت Handshake از {}: {}", addr, peer_id);
                 
-                // اضافه کردن peer جدید
+                // Add peer جدید
                 let peer = Peer {
                     id: peer_id.clone(),
                     address: addr,
@@ -236,7 +236,7 @@ impl NetworkNode {
                 
                 peers.lock().await.insert(peer_id, peer);
                 
-                // ارسال پاسخ
+                // Send پاسخ
                 let response = NetworkMessage::HandshakeResponse {
                     node_id,
                     accepted: true,
@@ -248,19 +248,19 @@ impl NetworkNode {
             }
             
             NetworkMessage::NewTransaction(transaction) => {
-                println!("📨 دریافت تراکنش جدید: {}", transaction.id);
+                println!("📨 دریافت transaction جدید: {}", transaction.id);
                 
-                // اضافه کردن تراکنش به blockchain
+                // Add transaction به blockchain
                 let mut blockchain = blockchain.lock().await;
                 if let Err(e) = blockchain.add_transaction(transaction) {
-                    println!("❌ خطا در اضافه کردن تراکنش: {}", e);
+                    println!("❌ Error in اضافه کRejectن transaction: {}", e);
                 }
             }
             
             NetworkMessage::NewBlock(block) => {
-                println!("📦 دریافت بلاک جدید: #{}", block.index);
+                println!("📦 دریافت block جدید: #{}", block.index);
                 
-                // بررسی و اضافه کردن بلاک (پیاده‌سازی کامل نیاز به منطق همگام‌سازی دارد)
+                // Check و اضافه کRejectن block (پیاده‌سازی کامل نیاز به منطق synchronization داReject)
                 // فعلاً فقط لاگ می‌کنیم
             }
             
@@ -309,12 +309,12 @@ impl NetworkNode {
     async fn broadcast_message(&self, message: NetworkMessage) -> Result<(), String> {
         let peers = self.peers.lock().await;
         let message_json = serde_json::to_string(&message)
-            .map_err(|_| "خطا در سریال کردن پیام".to_string())?;
+            .map_err(|_| "Error in سریال کRejectن پیام".to_string())?;
 
         for peer in peers.values() {
             if let Ok(mut stream) = TcpStream::connect(peer.address).await {
                 let _ = stream.write_all(message_json.as_bytes()).await;
-                println!("📡 پیام به {} ارسال شد", peer.id);
+                println!("📡 پیام به {} sent", peer.id);
             }
         }
 
@@ -350,13 +350,13 @@ pub struct NetworkStats {
 
 impl std::fmt::Display for NetworkStats {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        writeln!(f, "🌐 آمار شبکه")?;
+        writeln!(f, "🌐 آمار network")?;
         writeln!(f, "==============")?;
-        writeln!(f, "🆔 شناسه نود: {}", self.node_id)?;
-        writeln!(f, "📍 آدرس: {}", self.listen_address)?;
+        writeln!(f, "🆔 شناسه node: {}", self.node_id)?;
+        writeln!(f, "📍 address: {}", self.listen_address)?;
         writeln!(f, "👥 peers متصل: {}", self.connected_peers)?;
-        writeln!(f, "📏 ارتفاع بلاک چین: {}", self.blockchain_height)?;
-        writeln!(f, "🔄 وضعیت: {}", if self.is_running { "فعال" } else { "غیرفعال" })?;
+        writeln!(f, "📏 ارتفاع blockchain: {}", self.blockchain_height)?;
+        writeln!(f, "🔄 وضعیت: {}", if self.is_running { "active" } else { "غیرactive" })?;
         Ok(())
     }
 }

@@ -153,22 +153,22 @@ pub async fn start_api_server(blockchain: Arc<Mutex<Blockchain>>) {
                     <h1>🪙 TenCoin (TEC) API Server</h1>
                     <h2>Available Endpoints:</h2>
                     <ul>
-                        <li><strong>GET /blockchain/info</strong> - اطلاعات بلاک چین</li>
-                        <li><strong>POST /wallet/generate</strong> - ایجاد کیف پول</li>
-                        <li><strong>GET /wallet/generate?type=bech32</strong> - ایجاد کیف پول با query</li>
-                        <li><strong>POST /transaction/send</strong> - ارسال تراکنش</li>
-                        <li><strong>GET /balance/{address}</strong> - موجودی آدرس</li>
-                        <li><strong>GET /mining/stats</strong> - آمار استخراج</li>
+                        <li><strong>GET /blockchain/info</strong> - اطلاعات blockchain</li>
+                        <li><strong>POST /wallet/generate</strong> - ایجاد wallet</li>
+                        <li><strong>GET /wallet/generate?type=bech32</strong> - ایجاد wallet با query</li>
+                        <li><strong>POST /transaction/send</strong> - ارسال transaction</li>
+                        <li><strong>GET /balance/{address}</strong> - balance address</li>
+                        <li><strong>GET /mining/stats</strong> - آمار mining</li>
                     </ul>
                     <h3>نمونه درخواست‌ها:</h3>
                     <pre>
-# ایجاد کیف پول bech32
+# ایجاد wallet bech32
 curl "http://localhost:8333/wallet/generate?type=bech32"
 
-# ایجاد کیف پول multisig
+# ایجاد wallet multisig
 curl "http://localhost:8333/wallet/generate?type=p2sh&required=2&total=4"
 
-# اطلاعات بلاک چین
+# اطلاعات blockchain
 curl "http://localhost:8333/blockchain/info"
                     </pre>
                 </body>
@@ -186,7 +186,7 @@ curl "http://localhost:8333/blockchain/info"
         .or(mining_stats)
         .with(cors);
 
-    println!("🌐 API Server شروع شد در: http://0.0.0.0:8333");
+    println!("🌐 API Server Start شد در: http://0.0.0.0:8333");
     warp::serve(routes).run(([0, 0, 0, 0], 8333)).await;
 }
 
@@ -204,7 +204,7 @@ async fn get_blockchain_info(blockchain: Arc<Mutex<Blockchain>>) -> Result<impl 
         total_supply,
         max_supply: 10_000_000.0,
         current_reward,
-        difficulty: blockchain.difficulty,
+        difficulty: blockchain.get_difficulty(),
         pending_transactions: blockchain.get_pending_transactions_count(),
         next_halving,
         halving_countdown,
@@ -230,7 +230,7 @@ async fn generate_wallet(
             let response = WalletGenerateResponse {
                 success: false,
                 wallet: None,
-                error: Some("نوع کیف پول نامعتبر است".to_string()),
+                error: Some("نوع wallet is invalid".to_string()),
             };
             return Ok(warp::reply::json(&response));
         }
@@ -281,9 +281,9 @@ async fn send_transaction(
     let mut blockchain = blockchain.lock().await;
     let wallet_manager = wallet_manager.lock().await;
 
-    // بررسی آدرس فرستنده
+    // Check address فرستنده
     if let Some(wallet) = wallet_manager.get_wallet(&request.from_address) {
-        // ایجاد تراکنش (ساده‌سازی شده)
+        // Create transaction (ساده‌سازی شده)
         match Transaction::new_with_fee(
             request.from_address,
             request.to_address,
@@ -325,7 +325,7 @@ async fn send_transaction(
         let response = TransactionResponse {
             success: false,
             txid: None,
-            error: Some("کیف پول فرستنده یافت نشد".to_string()),
+            error: Some("wallet فرستنده not found".to_string()),
         };
         Ok(warp::reply::json(&response))
     }
@@ -363,7 +363,7 @@ async fn get_mining_stats(blockchain: Arc<Mutex<Blockchain>>) -> Result<impl war
         blocks_until_halving,
         total_mined,
         remaining_supply,
-        difficulty: blockchain.difficulty,
+        difficulty: blockchain.get_difficulty(),
     };
 
     Ok(warp::reply::json(&response))

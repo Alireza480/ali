@@ -16,53 +16,56 @@ pub struct Blockchain {
 }
 
 impl Blockchain {
+    pub fn get_difficulty(&self) -> usize {
+        self.difficulty
+    }
     pub fn new() -> Self {
         Blockchain {
             chain: Vec::new(),
-            difficulty: 5, // سختی 5 صفر
+            difficulty: 5, // Difficulty 5 zeros
             pending_transactions: Vec::new(),
-            mining_reward: 50.0, // پاداش اولیه 50 TEC
+            mining_reward: 50.0, // Initial reward 50 TEC
             balances: HashMap::new(),
         }
     }
 
     pub fn create_genesis_block(&mut self) {
         if self.chain.is_empty() {
-            println!("🌟 ایجاد بلاک Genesis...");
+            println!("🌟 Creating Genesis block...");
             let genesis_block = Block::genesis();
             
-            // به‌روزرسانی موجودی‌ها از بلاک Genesis
+            // Update balances from Genesis block
             self.update_balances_from_block(&genesis_block);
             
             self.chain.push(genesis_block);
-            println!("✅ بلاک Genesis ایجاد شد!");
-            println!("💎 کل عرضه فعلی: {} TEC", self.get_total_supply());
+            println!("✅ Genesis block created!");
+            println!("💎 Current total supply: {} TEC", self.get_total_supply());
         }
     }
 
-    // محاسبه پاداش استخراج با در نظر گیری هاوینگ
+    // Calculate mining reward considering halving
     pub fn calculate_mining_reward(&self) -> f64 {
         let current_height = self.chain.len() as u64;
         let halving_interval = 100_000u64;
         let halvings = current_height / halving_interval;
         
-        // اگر تمام هاوینگ‌ها تمام شده باشد، پاداش صفر است
-        if halvings >= 8 { // 50 / 2^8 ≈ 0.2, که عملاً صفر است
+        // If all halvings are completed, reward is zero
+        if halvings >= 8 { // 50 / 2^8 ≈ 0.2, practically zero
             return 0.0;
         }
         
-        // محاسبه پاداش فعلی
+        // Calculate current reward
         let current_reward = self.mining_reward / (2.0_f64.powi(halvings as i32));
         
-        // بررسی حداکثر عرضه (10 میلیون)
+        // Check maximum supply (10 million)
         let max_supply = 10_000_000.0;
         let current_supply = self.get_total_supply();
         
         if current_supply >= max_supply {
-            return 0.0; // دیگر پاداش استخراج نیست
+            return 0.0; // No more mining rewards
         }
         
-        // اطمینان از عدم تجاوز از حداکثر عرضه
+        // Ensure not exceeding maximum supply
         if current_supply + current_reward > max_supply {
             return max_supply - current_supply;
         }
@@ -70,7 +73,7 @@ impl Blockchain {
         current_reward
     }
 
-    // بررسی اینکه آیا هاوینگ اتفاق افتاده است
+    // Check if halving has occurred
     pub fn check_halving(&self) -> Option<u64> {
         let current_height = self.chain.len() as u64;
         let halving_interval = 100_000u64;
@@ -87,24 +90,24 @@ impl Blockchain {
     }
 
     pub fn add_transaction(&mut self, transaction: Transaction) -> Result<(), String> {
-        // بررسی صحت تراکنش
+        // Validate transaction
         if !transaction.is_valid() {
-            return Err("تراکنش نامعتبر است".to_string());
+            return Err("Invalid transaction".to_string());
         }
 
-        // بررسی موجودی (برای تراکنش‌های غیر سیستمی)
+        // Check balance (for non-system transactions)
         if !transaction.from_address.is_empty() {
             let balance = self.get_balance(&transaction.from_address);
             if balance < transaction.amount {
                 return Err(format!(
-                    "موجودی ناکافی! موجودی فعلی: {}, مقدار درخواستی: {}",
+                    "Insufficient balance! Current: {}, Required: {}",
                     balance, transaction.amount
                 ));
             }
         }
 
         self.pending_transactions.push(transaction);
-        println!("📝 تراکنش جدید به صف انتظار اضافه شد");
+        println!("📝 New transaction added to pending queue");
         Ok(())
     }
 
@@ -112,7 +115,7 @@ impl Blockchain {
         let current_reward = self.calculate_mining_reward();
         let mut transactions = Vec::new();
 
-        // اضافه کردن تراکنش پاداش استخراج (اگر هنوز پاداش وجود دارد)
+        // Add transaction reward mining (اگر هنوز reward وجود داReject)
         if current_reward > 0.0 {
             let reward_transaction = Transaction::mining_reward(
                 mining_reward_address.to_string(),
@@ -121,15 +124,15 @@ impl Blockchain {
             transactions.push(reward_transaction);
         }
 
-        // اضافه کردن تراکنش‌های در انتظار
+        // Add transaction‌های pending
         transactions.extend(self.pending_transactions.clone());
 
-        // اگر هیچ تراکنشی نباشد، بلاک خالی نمی‌سازیم
+        // اگر هیچ transactionی نباشد، block خالی نمی‌سازیم
         if transactions.is_empty() {
-            return Err("هیچ تراکنش برای استخراج وجود ندارد".to_string());
+            return Err("هیچ transaction برای mining وجود نداReject".to_string());
         }
 
-        // ایجاد بلاک جدید
+        // Create block جدید
         let previous_hash = self.get_latest_block()
             .map(|block| block.hash.clone())
             .unwrap_or_default();
@@ -140,45 +143,45 @@ impl Blockchain {
             previous_hash,
         );
 
-        // استخراج بلاک (Proof of Work)
-        println!("⛏️  شروع استخراج بلاک...");
+        // Mining block (Proof of Work)
+        println!("⛏️  Start mining block...");
         let start_time = std::time::Instant::now();
         
-        // استخراج در یک task جداگانه برای non-blocking بودن
+        // Mining در یک task جداگانه برای non-blocking بودن
         let difficulty = self.difficulty;
         new_block = tokio::task::spawn_blocking(move || {
-            new_block.mine_block(difficulty); // سختی 5 صفر
+            new_block.mine_block(difficulty); // difficulty 5 صفر
             new_block
-        }).await.map_err(|_| "خطا در استخراج بلاک")?;
+        }).await.map_err(|_| "Error in mining block")?;
 
         let duration = start_time.elapsed();
-        println!("⏱️  زمان استخراج: {:.2} ثانیه", duration.as_secs_f64());
+        println!("⏱️  زمان mining: {:.2} ثانیه", duration.as_secs_f64());
 
-        // بررسی صحت بلاک
+        // Check صحت block
         let previous_hash = self.get_latest_block()
             .map(|block| block.hash.as_str())
             .unwrap_or("");
 
         if !new_block.is_valid(previous_hash) {
-            return Err("بلاک استخراج شده نامعتبر است".to_string());
+            return Err("block minedه is invalid".to_string());
         }
 
-        // به‌روزرسانی موجودی‌ها
+        // Update balance‌ها
         self.update_balances_from_block(&new_block);
 
-        // اضافه کردن بلاک به زنجیره
+        // Add block به زنجیره
         self.chain.push(new_block);
 
-        // پاک کردن تراکنش‌های در انتظار
+        // پاک کRejectن transaction‌های pending
         self.pending_transactions.clear();
 
-        // بررسی هاوینگ
+        // Check halving
         if let Some(halving_count) = self.check_halving() {
             let new_reward = self.calculate_mining_reward();
-            println!("🎉 هاوینگ #{} اتفاق افتاد! پاداش جدید: {} TEC", halving_count, new_reward);
+            println!("🎉 halving #{} اتفاق افتاد! reward جدید: {} TEC", halving_count, new_reward);
         }
 
-        println!("✅ بلاک جدید با موفقیت به زنجیره اضافه شد!");
+        println!("✅ block جدید successfully به زنجیره added!");
         println!("💎 کل عرضه: {} TEC از 10,000,000 TEC", self.get_total_supply());
         
         Ok(())
@@ -213,37 +216,37 @@ impl Blockchain {
             return true;
         }
 
-        // بررسی بلاک Genesis
+        // Check block Genesis
         if self.chain[0].index != 0 || !self.chain[0].previous_hash.is_empty() {
-            println!("❌ بلاک Genesis نامعتبر است");
+            println!("❌ block Genesis is invalid");
             return false;
         }
 
-        // بررسی باقی بلاک‌ها
+        // Check باقی block‌ها
         for i in 1..self.chain.len() {
             let current_block = &self.chain[i];
             let previous_block = &self.chain[i - 1];
 
-            // بررسی صحت بلاک فعلی
+            // Check صحت block فعلی
             if !current_block.is_valid(&previous_block.hash) {
-                println!("❌ بلاک {} نامعتبر است", i);
+                println!("❌ block {} is invalid", i);
                 return false;
             }
 
-            // بررسی اتصال با بلاک قبلی
+            // Check اتصال با block قبلی
             if current_block.previous_hash != previous_block.hash {
-                println!("❌ اتصال بین بلاک‌های {} و {} قطع است", i - 1, i);
+                println!("❌ اتصال بین block‌های {} و {} قطع است", i - 1, i);
                 return false;
             }
 
-            // بررسی ترتیب index
+            // Check ترتیب index
             if current_block.index != previous_block.index + 1 {
-                println!("❌ ترتیب بلاک‌ها اشتباه است");
+                println!("❌ ترتیب block‌ها اشتباه است");
                 return false;
             }
         }
 
-        println!("✅ زنجیره بلاک معتبر است");
+        println!("✅ زنجیره block معتبر است");
         true
     }
 
@@ -270,19 +273,19 @@ impl Blockchain {
         }
     }
 
-    // صادر کردن زنجیره به JSON
+    // صادر کRejectن زنجیره به JSON
     pub fn export_json(&self) -> Result<String, String> {
         serde_json::to_string_pretty(self)
-            .map_err(|_| "خطا در صادر کردن زنجیره".to_string())
+            .map_err(|_| "Error in صادر کRejectن زنجیره".to_string())
     }
 
-    // وارد کردن زنجیره از JSON
+    // واReject کRejectن زنجیره از JSON
     pub fn import_json(json: &str) -> Result<Self, String> {
         serde_json::from_str(json)
-            .map_err(|_| "خطا در وارد کردن زنجیره".to_string())
+            .map_err(|_| "Error in واReject کRejectن زنجیره".to_string())
     }
 
-    // دریافت تراکنش‌های یک آدرس
+    // Receive transaction‌های یک address
     pub fn get_transactions_for_address(&self, address: &str) -> Vec<&Transaction> {
         let mut transactions = Vec::new();
         
@@ -303,19 +306,19 @@ pub struct BlockchainInfo {
     pub total_blocks: usize,
     pub total_transactions: usize,
     pub total_supply: f64,
-    pub difficulty: usize,
+    difficulty: usize,
     pub mining_reward: f64,
     pub pending_transactions: usize,
 }
 
 impl fmt::Display for Blockchain {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        writeln!(f, "⛓️  زنجیره بلاک RustCoin")?;
+        writeln!(f, "⛓️  زنجیره block RustCoin")?;
         writeln!(f, "========================")?;
-        writeln!(f, "📊 تعداد بلاک‌ها: {}", self.chain.len())?;
-        writeln!(f, "⚙️  سختی: {}", self.difficulty)?;
-        writeln!(f, "💰 پاداش استخراج: {} RustCoin", self.mining_reward)?;
-        writeln!(f, "⏳ تراکنش‌های در انتظار: {}", self.pending_transactions.len())?;
+        writeln!(f, "📊 تعداد block‌ها: {}", self.chain.len())?;
+        writeln!(f, "⚙️  difficulty: {}", self.difficulty)?;
+        writeln!(f, "💰 reward mining: {} RustCoin", self.mining_reward)?;
+        writeln!(f, "⏳ transaction‌های pending: {}", self.pending_transactions.len())?;
         writeln!(f, "💎 کل عرضه: {} RustCoin", self.get_total_supply())?;
         writeln!(f, "========================")?;
         

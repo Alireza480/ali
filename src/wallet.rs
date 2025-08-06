@@ -17,7 +17,7 @@ impl Wallet {
         let secp = Secp256k1::new();
         let mut rng = OsRng;
         
-        // تولید کلید خصوصی
+        // Generate کلید خصوصی
         let mut key_bytes = [0u8; 32];
         let private_key = loop {
             rng.fill_bytes(&mut key_bytes);
@@ -26,10 +26,10 @@ impl Wallet {
             }
         };
         
-        // تولید کلید عمومی
+        // Generate کلید عمومی
         let public_key = PublicKey::from_secret_key(&secp, &private_key);
         
-        // تولید آدرس از کلید عمومی
+        // Generate address از کلید عمومی
         let address = Self::generate_address(&public_key);
         
         Wallet {
@@ -41,10 +41,10 @@ impl Wallet {
 
     pub fn from_private_key(private_key_hex: &str) -> Result<Self, String> {
         let private_key_bytes = hex::decode(private_key_hex)
-            .map_err(|_| "کلید خصوصی نامعتبر است".to_string())?;
+            .map_err(|_| "کلید خصوصی is invalid".to_string())?;
         
         let private_key = SecretKey::from_slice(&private_key_bytes)
-            .map_err(|_| "کلید خصوصی نامعتبر است".to_string())?;
+            .map_err(|_| "کلید خصوصی is invalid".to_string())?;
         
         let secp = Secp256k1::new();
         let public_key = PublicKey::from_secret_key(&secp, &private_key);
@@ -63,7 +63,7 @@ impl Wallet {
         hasher.update(&public_key_bytes);
         let hash = hasher.finalize();
         
-        // استفاده از 20 بایت اول hash برای آدرس
+        // استفاده از 20 بایت اول hash برای address
         let address_bytes = &hash[..20];
         format!("RC{}", hex::encode(address_bytes)) // RC = RustCoin
     }
@@ -82,19 +82,19 @@ impl Wallet {
 
     pub fn sign_data(&self, data: &str) -> Result<String, String> {
         let private_key_bytes = hex::decode(&self.private_key)
-            .map_err(|_| "کلید خصوصی نامعتبر است".to_string())?;
+            .map_err(|_| "کلید خصوصی is invalid".to_string())?;
         
         let private_key = SecretKey::from_slice(&private_key_bytes)
-            .map_err(|_| "کلید خصوصی نامعتبر است".to_string())?;
+            .map_err(|_| "کلید خصوصی is invalid".to_string())?;
         
-        // هش کردن داده
+        // Hash کRejectن داده
         let mut hasher = Sha256::new();
         hasher.update(data.as_bytes());
         let hash = hasher.finalize();
         
         let secp = Secp256k1::new();
         let message = Message::from_digest_slice(&hash)
-            .map_err(|_| "خطا در ایجاد پیام".to_string())?;
+            .map_err(|_| "Error in ایجاد پیام".to_string())?;
         
         let signature = secp.sign_ecdsa(&message, &private_key);
         Ok(hex::encode(signature.serialize_compact()))
@@ -106,7 +106,7 @@ impl Wallet {
             hex::decode(public_key_hex)
         ) {
             (Ok(signature_bytes), Ok(public_key_bytes)) => {
-                // هش کردن داده
+                // Hash کRejectن داده
                 let mut hasher = Sha256::new();
                 hasher.update(data.as_bytes());
                 let hash = hasher.finalize();
@@ -127,30 +127,30 @@ impl Wallet {
         }
     }
 
-    // ایجاد کیف پول از seed phrase (برای آینده)
+    // Create wallet از seed phrase (برای آینده)
     pub fn from_seed(_seed: &str) -> Result<Self, String> {
         // پیاده‌سازی BIP39 برای آینده
-        // فعلاً یک کیف پول تصادفی برمی‌گردانیم
+        // فعلاً یک wallet تصادفی برمی‌گRejectانیم
         Ok(Self::new())
     }
 
-    // صادر کردن کیف پول به فرمت JSON
+    // صادر کRejectن wallet به فرمت JSON
     pub fn export_json(&self) -> Result<String, String> {
         serde_json::to_string_pretty(self)
-            .map_err(|_| "خطا در صادر کردن کیف پول".to_string())
+            .map_err(|_| "Error in صادر کRejectن wallet".to_string())
     }
 
-    // وارد کردن کیف پول از فرمت JSON
+    // واReject کRejectن wallet از فرمت JSON
     pub fn import_json(json: &str) -> Result<Self, String> {
         serde_json::from_str(json)
-            .map_err(|_| "خطا در وارد کردن کیف پول".to_string())
+            .map_err(|_| "Error in واReject کRejectن wallet".to_string())
     }
 }
 
 impl fmt::Display for Wallet {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        writeln!(f, "👛 کیف پول RustCoin")?;
-        writeln!(f, "📍 آدرس: {}", self.address)?;
+        writeln!(f, "👛 wallet RustCoin")?;
+        writeln!(f, "📍 address: {}", self.address)?;
         writeln!(f, "🔑 کلید عمومی: {}...", &self.public_key[..16])?;
         writeln!(f, "🔐 کلید خصوصی: {}... (محرمانه!)", &self.private_key[..16])?;
         Ok(())
